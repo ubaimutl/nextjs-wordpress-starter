@@ -1,65 +1,90 @@
-import Image from "next/image";
+import { CategoryFilter } from "@/components/category-filter";
+import { Pagination } from "@/components/pagination";
+import { PostsGrid } from "@/components/posts-grid";
+import { SearchBar } from "@/components/search-bar";
+import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
+import { getSingleParam, parseIdsCsv, parsePositiveInt } from "@/lib/wordpress/query";
+import { getCategories, getPosts } from "@/lib/wordpress/server";
 
-export default function Home() {
+export default async function HomePage({ searchParams }) {
+  const params = await searchParams;
+
+  const query = (getSingleParam(params.q) ?? "").trim();
+  const page = parsePositiveInt(getSingleParam(params.page), 1);
+  const selectedCategoryIds = parseIdsCsv(getSingleParam(params.categories));
+  let categories = [];
+  let postsResult = null;
+  let fetchError = "";
+
+  try {
+    [categories, postsResult] = await Promise.all([
+      getCategories({ hide_empty: true, per_page: 100 }),
+      getPosts({
+        page,
+        per_page: 9,
+        search: query || undefined,
+        categories: selectedCategoryIds.length > 0 ? selectedCategoryIds : undefined,
+        orderby: "date",
+        order: "desc",
+      }),
+    ]);
+  } catch (error) {
+    fetchError = error instanceof Error ? error.message : "Unknown error";
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.js file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+    <div className="min-h-screen">
+      <SiteHeader
+        title="WordPress Content, Modern Next.js"
+        subtitle={
+          fetchError
+            ? "Set WORDPRESS_URL and make sure your WordPress site exposes the REST API."
+            : "A production-ready starter using Next.js App Router and route handlers on top of the WordPress REST API."
+        }
+      />
+
+      <main
+        className={`mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 ${
+          fetchError ? "py-12" : "space-y-6 py-8"
+        }`}
+      >
+        {fetchError ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+            Failed to fetch posts: {fetchError}
+          </div>
+        ) : (
+          <>
+            <SearchBar query={query} categoriesCsv={selectedCategoryIds.join(",")} />
+
+            {categories.length > 0 ? (
+              <CategoryFilter
+                categories={categories}
+                selectedCategoryIds={selectedCategoryIds}
+                query={query}
+              />
+            ) : null}
+
+            <PostsGrid posts={postsResult?.posts ?? []} />
+
+            <Pagination
+              page={page}
+              totalPages={postsResult?.pages ?? 0}
+              query={query}
+              categories={selectedCategoryIds}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+            {(postsResult?.total ?? 0) > 0 ? (
+              <p className="text-center text-sm text-[var(--muted)]">
+                Showing {postsResult?.posts.length ?? 0} posts on page {page} of{" "}
+                {postsResult?.pages ?? 0}
+              </p>
+            ) : null}
+          </>
+        )}
       </main>
+
+      <SiteFooter />
     </div>
   );
 }
