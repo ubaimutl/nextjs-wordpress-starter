@@ -1,5 +1,7 @@
 # Next.js WordPress Starter (JavaScript)
 
+![Demo preview](./public/chrome-capture-2026-02-21.gif)
+
 JavaScript-only WordPress starter template built with:
 
 - Next.js 16 App Router
